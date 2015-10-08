@@ -71,6 +71,16 @@ if [ $result -ne 0 ]; then
     # would down/up $phys here; Marvell hw issue.
 fi
 
+# check Internet through physical connection
+
+nsexec ping -q $InternetTarget -c 1 -W 5 2>&1 >/dev/null
+result=$?
+
+if [ $result -ne 0 ]; then
+	>&2 echo "Failed to ping from $phys. Internet is down?"
+	exit 1
+fi
+
 # check tunnel
 
 # there has to be a better way to get the IP address of the other tunnel endpoint
@@ -78,16 +88,11 @@ tunnel_ep=`ip route | grep -v '/' | egrep 'via .* *dev *tun0 *' | awk '{print $3
 ping $tunnel_ep -I $tun -r -c 1 -W 5 2>&1 >/dev/null
 result=$?
 if [ $result -ne 0 ]; then
-	>&2 echo "Failed to ping $tun endpoing $tunnel_ep. $tun is down?"
-	# would restart tunnel here
-fi
-
-nsexec ping -q $InternetTarget -c 1 -W 5 2>&1 >/dev/null
-result=$?
-
-if [ $result -ne 0 ]; then
-    >&2 echo "Failed to ping from $phys. Network is down?"
-    # would restart VPN here
+	>&2 echo "Failed to ping $tun endpoint $tunnel_ep. $tun is down?"
+	# restart tunnel
+	service=`systemctl | grep pia@  | awk '{print $1}'`
+	>&2 echo "Restarting tunnel $service"
+	systemctl restart $service
 fi
 
 #!@todo wait for vpn restart. Is there a trigger when OpenVPN establishes new routes?
