@@ -9,7 +9,7 @@
 # to a new table. 
 
 phys=eth0
-tun=$tun0
+tun=tun0
 
 veth_sub=10.10.1
 
@@ -25,7 +25,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 for i in $phys tun0; do
-    sysctl -w net.ipv4.conf.$i.rp_filter=2
+    sysctl -w net.ipv4.conf.$i.rp_filter=2 >/dev/null
 done
 egrep -q '^10[[:space:]]+'$phys'$' /etc/iproute2/rt_tables || echo "10 $phys" | tee -a /etc/iproute2/rt_tables > /dev/null
 
@@ -63,7 +63,7 @@ done
 
 ip rule add from $veth_sub.0/24 lookup $phys 2>/dev/null
 
-nsexec ping -q -m 10 $InternetTarget -c 1 -W 5
+nsexec ping -q -m 10 $InternetTarget -c 1 -W 5 2>&1 >/dev/null
 result=$?
 
 if [ $result -ne 0 ]; then
@@ -75,14 +75,14 @@ fi
 
 # there has to be a better way to get the IP address of the other tunnel endpoint
 tunnel_ep=`ip route | grep -v '/' | egrep 'via .* *dev *tun0 *' | awk '{print $3}'`
-ping $tunnel_up -I $tun -r -c 1 -W 5
+ping $tunnel_ep -I $tun -r -c 1 -W 5 2>&1 >/dev/null
 result=$?
 if [ $result -ne 0 ]; then
 	>&2 echo "Failed to ping $tun endpoing $tunnel_ep. $tun is down?"
 	# would restart tunnel here
 fi
 
-nsexec ping -q $InternetTarget -c 1 -W 5
+nsexec ping -q $InternetTarget -c 1 -W 5 2>&1 >/dev/null
 result=$?
 
 if [ $result -ne 0 ]; then
