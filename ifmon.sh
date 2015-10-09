@@ -24,7 +24,7 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-for i in $phys tun0; do
+for i in $phys $tun; do
     sysctl -w net.ipv4.conf.$i.rp_filter=2 >/dev/null
 done
 egrep -q '^10[[:space:]]+'$phys'$' /etc/iproute2/rt_tables || echo "10 $phys" | tee -a /etc/iproute2/rt_tables > /dev/null
@@ -83,16 +83,26 @@ fi
 
 # check tunnel
 
-# there has to be a better way to get the IP address of the other tunnel endpoint
-tunnel_ep=`ip route | grep -v '/' | egrep 'via .* *dev *tun0 *' | awk '{print $3}'`
-ping $tunnel_ep -I $tun -r -c 1 -W 5 2>&1 >/dev/null
+awk '$1~"^'$tun':$"{exit 0} END{exit 1}' /proc/net/dev
 result=$?
 if [ $result -ne 0 ]; then
-	>&2 echo "Failed to ping $tun endpoint $tunnel_ep. $tun is down?"
-	# restart tunnel
-	service=`systemctl | grep pia@  | awk '{print $1}'`
-	>&2 echo "Restarting tunnel $service"
-	systemctl restart $service
-fi
+	>&2 echo "No $tun device!"
+else
+	# there has to be a better way to get the IP address of the other tunnel endpoint
+	tunnel_ep=`ip route | grep -v '/' | egrep 'via .* *dev *$tun *' | awk '{print $3}'`
+	ping $tunnel_ep -I $tun -r -c 1 -W 5 2>&1 >/dev/null
+	result=$?
+	if [ $result -ne 0 ]; then
+		>&2 echo "Failed to ping $tun endpoint $tunnel_ep. $tun is down?"
+		# restart tunnel
+		service=`systemctl | grep pia@  | awk '{print $1}'`
+		if [ -n "$service" ]; then
+			>&2 echo "Restarting tunnel $service"
+			systemctl restart $service
+		else
+			>&2 echo "No tunnel service running!"
+		fi
+	fi
 
 #!@todo wait for vpn restart. Is there a trigger when OpenVPN establishes new routes?
+fi
