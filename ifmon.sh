@@ -83,7 +83,7 @@ fi
 
 # check tunnel
 
-awk '$1~"^'$tun':$"{exit 0} END{exit 1}' /proc/net/dev
+awk '$1~"^'$tun':$"{exit 0} ENDFILE{exit 1}' /proc/net/dev
 result=$?
 if [ $result -ne 0 ]; then
 	>&2 echo "No $tun device!"
